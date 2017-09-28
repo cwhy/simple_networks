@@ -1,0 +1,7 @@
+data/*
+*__pycache__*
+!data/.gitkeep
+storage/*
+!storage/.gitkeep
+*checkpoint
+.idea/*
