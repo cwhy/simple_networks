@@ -1,7 +1,8 @@
 import matplotlib.pyplot as plt
 import numpy as np
 import tensorflow as tf
-import lib.networks as nets
+
+import models.networks as nets
 from datasets import DataSet
 
 n_samples = 1000

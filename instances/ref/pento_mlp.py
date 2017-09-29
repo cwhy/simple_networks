@@ -1,35 +1,36 @@
+import os.path as op
+
 import numpy as np
 import tensorflow as tf
 
-import lib.networks as nets
+import models.networks as nets
 from datasets import DataSet
 
-n_samples = 10000
-dim_x = 50
-# v = np.random.binomial(1, 0.5, size=[dim_x])
-v = np.ones([dim_x])
-v[np.random.choice(dim_x, dim_x - 2, replace=False)] = 0
-print(v)
-dat_X = np.random.binomial(1, 0.5, size=[n_samples, dim_x])
+pento_dir = op.join(op.expanduser('~'), 'Data', 'pento',
+                    '64x64_20k_seed_12193885_64patches.npz')
+pento_file = np.load(pento_dir)
+pento_data = DataSet(pento_file['data'],
+                     pento_file['targets'])
+pento_data = DataSet(
+    x=pento_data.x.reshape((-1, 64, 64)),
+    y=pento_data.get_y_1hot())
 
-parity_data = DataSet(dat_X, (dat_X @ v % 2)[:, np.newaxis])
-parity_data = DataSet(parity_data.x, parity_data.get_y_1hot())
-
-(d_train, d_test) = parity_data.random_split(ratio=0.8)
+(d_train, d_test) = pento_data.random_split(ratio=0.8)
 
 data = d_train
-mb_size = 100
+mb_size = 200
 
-is_train = tf.placeholder(tf.bool, shape=())
 x = tf.placeholder(tf.float32, shape=[None] + list(data.dim_x))
-z = tf.placeholder(tf.float32, shape=[None] + list(data.dim_x))
-# x = tf.cond(is_train, lambda: x + z, lambda: x)
 y = tf.placeholder(tf.float32, shape=[None] + list(data.dim_y))
+is_train = tf.placeholder(tf.bool, shape=())
 # _flow = nets.cl.flatten(x)
 print(x.shape)
-y_hat_logits = nets.dense_net(x, [256, 64, 4, data.dim_y[0]],
+_flow = nets.le_conv_tune_64(tf.expand_dims(x, -1), 256,
+                             batch_norm=True,
+                             drop_out=None,
+                             is_train=is_train)
+y_hat_logits = nets.dense_net(_flow, [256, data.dim_y[0]],
                               batch_norm=True,
-                              activation_fn=tf.tanh,
                               drop_out=0.3,
                               is_train=is_train)
 y_hat = tf.sigmoid(y_hat_logits)
@@ -45,7 +46,7 @@ loss = tf.reduce_mean(s_c_e_w_l(logits=y_hat_logits, labels=y))
 # For batch normalization update
 update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
 with tf.control_dependencies(update_ops):
-    train = tf.train.AdamOptimizer().minimize(loss)
+    train = tf.train.RMSPropOptimizer(learning_rate=1e-4).minimize(loss)
 sess = tf.Session()
 sess.run(tf.global_variables_initializer())
 
@@ -55,12 +56,10 @@ data_test = d_test
 data_feed_test = {x: data_test.x,
                   y: data_test.y,
                   is_train: False}
-
-for _ in range(20):
-    for _ in range(100):
+for _ in range(200):
+    for _ in range(400):
         (epoch, marker), _batch = data.next_batch(mb_size, (epoch, marker))
-        val_z = np.random.normal(0, 0.1, size=[mb_size, dim_x])
-        _data_feed = {x: _batch.x, y: _batch.y, z: val_z, is_train: True}
+        _data_feed = {x: _batch.x, y: _batch.y, is_train: True}
         sess.run(train, feed_dict=_data_feed)
     val_n_wrong_tr = sess.run(n_wrong, feed_dict=_data_feed)
     val_accuracy = sess.run(accuracy, feed_dict=data_feed_test)

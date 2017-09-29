@@ -1,6 +1,7 @@
 import tensorflow as tf
+
 import datasets.mnist as mnist
-import lib.networks as nets
+import models.networks as nets
 
 data_train = mnist.train.sample(200)
 mb_size = 200
